@@ -4,7 +4,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.LruCache;
 import android.widget.ImageView;
 
 import java.io.IOException;
@@ -14,41 +13,21 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * 小民的图片加载类 v0.1
+ * 小民的图片加载类 v0.2
  *
- * 没有使用设计模式
+ * 单一职责原则
  * @author binze
  * 2020/7/3 14:24
  */
-// 不知道咋说。。。确确实实没有设计模式。我也欣慰的发现自己绝对不会写出这种代码来。
-// 不说可拓展性抽象性啥的。。。貌似这还有内存泄漏。
+// 分离了图片加载和图片缓存两部分职责
 public class ImageLoader {
     private static final String TAG = "ImageLoader";
 
-    private LruCache<String, Bitmap> mImageCache;   //缓存
+    private ImageCache mImageCache = new ImageCache();   //自定义缓存
     private ExecutorService mService    //线程池，线程数量为CPU数量
             = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private Handler mUIHandler = new Handler(Looper.getMainLooper());   //UI线程
 
-    public ImageLoader(){
-        initImageCache();
-    }
-
-    /**
-     * 初始化缓存
-     * @author binze
-     * 2020/7/3 14:28
-     */
-    private void initImageCache() {
-        final double maxMemory = Runtime.getRuntime().maxMemory() >> 10;    //最大可用内存
-        final double cacheSize = maxMemory / 4; //四分之一内存为缓存
-        mImageCache = new LruCache<String, Bitmap>((int) cacheSize){
-            @Override
-            protected int sizeOf(String key, Bitmap value) {
-                return value.getRowBytes() * value.getHeight() >> 10;
-            }
-        };
-    }
 
     /**
      * 将图片加载进imageView
@@ -56,6 +35,14 @@ public class ImageLoader {
      * 2020/7/3 14:33
      */
     public void displayImage(final String url, final ImageView imageView){
+        //若存在缓存则加载缓存
+        Bitmap bitmap = mImageCache.get(url);
+        if (bitmap != null) {
+            imageView.setImageBitmap(bitmap);
+            return;
+        }
+
+        //否则下载图片
         imageView.setTag(url);
         mService.submit(new Runnable() {
             @Override
